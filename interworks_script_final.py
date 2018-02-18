@@ -24,6 +24,8 @@ test = pd.read_csv(path + 'test.csv')
 train = pd.read_csv(path + 'train.csv')
 
 "test"
+"tes2"
+"test3"
 
 #%%
 # -------------------------------------------------------------------------
