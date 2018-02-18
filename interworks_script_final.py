@@ -10,22 +10,26 @@
 # -------------------------------------------------------------------------
 # IMPORT LIBRARIES, SET OPTIONS, READ DATA
 # -------------------------------------------------------------------------
+# System
+import os
+from os import listdir, makedirs, getcwd, remove
+from os.path import isfile, join, abspath, exists, isdir
+
+# Base
 import pandas as pd, numpy as np, matplotlib.pyplot as plt
 pd.options.display.max_rows = 1000
 pd.options.display.max_columns = 1000
 
-path = '/Users/cas/Dropbox/_Active/interworks case study/'
+path = getcwd() + '/Dropbox/_Git/Kaggle_Telstra'
 
-event_type = pd.read_csv(path + 'event_type.csv')
-log_feature = pd.read_csv(path + 'log_feature.csv')
-resource_type = pd.read_csv(path + 'resource_type.csv')
-severity_type = pd.read_csv(path + 'severity_type.csv')
-test = pd.read_csv(path + 'test.csv')
-train = pd.read_csv(path + 'train.csv')
+event_type = pd.read_csv(path + '/data' + '/event_type.csv')
+log_feature = pd.read_csv(path + '/data' + '/log_feature.csv')
+resource_type = pd.read_csv(path + '/data' + '/resource_type.csv')
+severity_type = pd.read_csv(path + '/data' + '/severity_type.csv')
+test = pd.read_csv(path + '/data' + '/test.csv')
+train = pd.read_csv(path + '/data' + '/train.csv')
 
-"test"
-"tes2"
-"test3"
+
 
 #%%
 # -------------------------------------------------------------------------
