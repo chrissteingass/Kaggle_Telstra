@@ -23,6 +23,8 @@ severity_type = pd.read_csv(path + 'severity_type.csv')
 test = pd.read_csv(path + 'test.csv')
 train = pd.read_csv(path + 'train.csv')
 
+"test"
+
 #%%
 # -------------------------------------------------------------------------
 # SECTION 1/2 -- FEATURE SELECTION:
