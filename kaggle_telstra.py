@@ -7,7 +7,7 @@
 
 #%%
 # -------------------------------------------------------------------------
-# IMPORT LIBRARIES, SET OPTIONS, READ DATA
+# IMPORT LIBRARIES, SET OPTIONS
 # -------------------------------------------------------------------------
 # System
 import os
@@ -16,19 +16,36 @@ from os.path import isfile, join, abspath, exists, isdir
 
 # Base
 import pandas as pd, numpy as np, matplotlib.pyplot as plt
+
+# Options
 pd.options.display.max_rows = 1000
 pd.options.display.max_columns = 1000
+from IPython.core.interactiveshell import InteractiveShell
+InteractiveShell.ast_node_interactivity = "all"
 
-path = getcwd() + '/Dropbox/_Git/Kaggle_Telstra'
+# Path
+path = getcwd() + '/Dropbox/_Code/'
 
-event_type = pd.read_csv(path + '/data' + '/event_type.csv')
-log_feature = pd.read_csv(path + '/data' + '/log_feature.csv')
-resource_type = pd.read_csv(path + '/data' + '/resource_type.csv')
-severity_type = pd.read_csv(path + '/data' + '/severity_type.csv')
-test = pd.read_csv(path + '/data' + '/test.csv')
-train = pd.read_csv(path + '/data' + '/train.csv')
+#%%
+# -------------------------------------------------------------------------
+# READ DATA
+# -------------------------------------------------------------------------
+filenames = [
+    'event_type.csv',
+    'log_feature.csv',
+    'resource_type.csv',
+    'severity_type.csv',
+    'test.csv',
+    'train.csv'
+    ]
 
+for filename in filenames:
+    dataset = pd.read_csv(path + 'Kaggle_Telstra/data/' + filename)
+    globals()[filename.split('.')[0]] = dataset
 
+    print(filename)
+    dataset.head(3)
+    print('')
 
 #%%
 # -------------------------------------------------------------------------
@@ -36,14 +53,12 @@ train = pd.read_csv(path + '/data' + '/train.csv')
 # Telstra provided seven data sets for this submission. Using these seven data sets, I wanted to create a training set that contains as much useful information as possible. Generally, this involved some combination of (1) directly merging sets by 'id', (2) creating frequency counts for each 'id', and (3) pivoting data sets to transform them from long, skinny sets to short wide sets.
 # -------------------------------------------------------------------------
 
-
-
 #%%
 # Concatenate the provided training and test sets (ultimately, I want both my training and test sets to have the same features, so concatenating them now and performing all my operations on the concatenated set is simpler).
 master = train.append(test)
 
 # Change cell values from strings to integer values
-master.location = master.location.apply(lambda x: int(x.split(' ')[1]))
+# master.location = master.location.apply(lambda x: int(x.split(' ')[1]))
 event_type.event_type = event_type.event_type.apply(lambda x: int(x.split(' ')[1]))
 log_feature.log_feature = log_feature.log_feature.apply(lambda x: int(x.split(' ')[1]))
 resource_type.resource_type = resource_type.resource_type.apply(lambda x: int(x.split(' ')[1]))
@@ -104,9 +119,9 @@ master = pd.merge(left=master, right=location_freq, on='location', how='inner')
 
 #%%
 # One Hot Encoding of location column
-master.head()
+
 encoded = pd.get_dummies(master, prefix=['location', 'severity_type'], prefix_sep='_', dummy_na=False, columns=['location', 'severity_type'], sparse=False, drop_first=False)
-encoded.head()
+
 
 #%%
 # -------------------------------------------------------------------------
@@ -129,22 +144,22 @@ train_y = encoded[encoded.fault_severity.isnull() == False]['fault_severity']
 test_X = encoded[encoded.fault_severity.isnull() == True].loc[:, 'id':]
 
 # Set StratifiedKFold options
-skfold = StratifiedKFold(n_splits=5, shuffle = True)
+skfold = StratifiedKFold(n_splits=4, shuffle = True)
 
 #%%
 # FIRST MODEL: EXTREME GRADIENT BOOSTING CLASSIFIER (SKLEARN)
 from xgboost import XGBClassifier
 # Define hyperparameter grid
 params = {
-        'min_child_weight': [1],
-        'subsample': [1],
-        'colsample_bytree': [0.3],
-        'max_depth': [4],
-        'learning_rate': [0.1]#[list(np.arange(0.01, 0.1, 0.01))]
-        }
-xgb_gridsearch.best_params_
+        'min_child_weight': [1,3,5],
+        'subsample': [0.5,0.7,1],
+        'colsample_bytree': [0.3,.7,1],
+        'max_depth': [3,4,8],
+        'learning_rate': list(np.arange(0.01, 0.1, 0.02)),
+        'n_estimators': [1000]}
+
 # Define XGBoost function
-boost = XGBClassifier(n_estimators=1000, objective='multi:softprob', silent=True, nthread=1)
+boost = XGBClassifier(n_estimators=1000, objective='multi:softprob', silent=True, nthread=4)
 
 # Set GridSearchCV options
 xgb_gridsearch = GridSearchCV(boost, param_grid=params, scoring='log_loss', n_jobs=4, cv=skfold.split(train_X,train_y), verbose=2)
@@ -158,13 +173,13 @@ from sklearn.ensemble import RandomForestClassifier
 # Define hyperparameter grid
 params = {
         'n_estimators': [1000],
-        'max_features': ['auto', 'sqrt'],
+        'max_features': ['auto'],
         'max_depth': [50], #list(range(10,100,10)),
         'min_samples_split': [10],
         'min_samples_leaf': [1],
         'bootstrap': [0,1]
         }
-rf_gridsearch.best_params_
+
 # Define Random Forest function
 trees = RandomForestClassifier()
 
@@ -178,7 +193,7 @@ rf_gridsearch.fit(train_X, train_y)
 
 # ENSEMBLE USING SKLEARN WEIGHTED VOTING
 from sklearn.ensemble import VotingClassifier
-ensemble = VotingClassifier(estimators=[('boost', xgb_gridsearch.best_estimator_), ('trees', rf_gridsearch.best_estimator_)], voting='soft', weights=[2,1])
+ensemble = VotingClassifier(estimators=[('boost', xgb_gridsearch.best_estimator_), ('trees', rf_gridsearch.best_estimator_)], voting='soft', weights=[1,0])
 
 ensemble = ensemble.fit(train_X, train_y)
 
@@ -191,7 +206,7 @@ submission.columns = ['predict_0', 'predict_1', 'predict_2', 'id']
 # Reorder columns
 submission = submission[['id', 'predict_0', 'predict_1', 'predict_2']]
 # Write to .csv
-submission.to_csv(path + 'extra_submission.csv', index=None)
+submission.to_csv(path + 'bonus_submission.csv', index=None)
 
 
 
