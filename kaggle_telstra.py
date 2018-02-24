@@ -45,7 +45,8 @@ for filename in filenames:
 
     print(filename)
     dataset.head(3)
-    print('')
+    dataset.shape
+    print('\n')
 
 #%%
 # -------------------------------------------------------------------------
@@ -109,6 +110,19 @@ resource_type_pivot.columns = ['resource_type_' + str(x) for x in resource_type_
 master = pd.merge(left=master, right=resource_type_pivot, how='inner', left_on='id', right_index=True)
 
 #%%
+# Add the features to each location by grouping by location ad summing the values in each column.The idea is that, because location is an important feature, we should have as much information as possible on each location in the final master set, even if that means many nonunique rows.
+
+# Subset via grouby
+subset = master.groupby('location').sum()
+# Drop the columns where summing would be pointless
+del subset['id']
+del subset['severity_type']
+# Rename the new columns
+subset.columns = ['loc_' + x for x in subset.columns]
+# Merge
+master = pd.merge(left=master, right=subset1, how='inner', left_on='location', right_index=True)
+
+#%%
 
 # MISC: Create frequency column: how often does every location appear in the dataset
 location_freq = pd.DataFrame(master.groupby('location').count()['id'])
@@ -116,6 +130,8 @@ location_freq['location'] = location_freq.index
 location_freq.columns = ['location_freq', 'location']
 # Merge
 master = pd.merge(left=master, right=location_freq, on='location', how='inner')
+
+
 
 #%%
 # One Hot Encoding of location column
@@ -143,6 +159,10 @@ train_X = encoded[encoded.fault_severity.isnull() == False].loc[:, 'id':]
 train_y = encoded[encoded.fault_severity.isnull() == False]['fault_severity']
 test_X = encoded[encoded.fault_severity.isnull() == True].loc[:, 'id':]
 
+# Clean up missing values in test_X
+for col in test_X.columns:
+    test_X[col] = test_X[col].apply(lambda x: np.nan_to_num(x))
+
 # Set StratifiedKFold options
 skfold = StratifiedKFold(n_splits=4, shuffle = True)
 
@@ -151,10 +171,10 @@ skfold = StratifiedKFold(n_splits=4, shuffle = True)
 from xgboost import XGBClassifier
 # Define hyperparameter grid
 params = {
-        'min_child_weight': [1,3,5],
-        'subsample': [0.5,0.7,1],
-        'colsample_bytree': [0.3,.7,1],
-        'max_depth': [3,4,8],
+        'min_child_weight': [1],
+        'subsample': [0.5,1],
+        'colsample_bytree': [0.3,1],
+        'max_depth': [4,8],
         'learning_rate': list(np.arange(0.01, 0.1, 0.02)),
         'n_estimators': [1000]}
 
@@ -167,6 +187,8 @@ xgb_gridsearch = GridSearchCV(boost, param_grid=params, scoring='log_loss', n_jo
 # Fit
 xgb_gridsearch.fit(train_X, train_y)
 
+
+
 #%%
 # SECOND MODEL: RANDOM FOREST CLASSIFIER (SKLEARN)
 from sklearn.ensemble import RandomForestClassifier
@@ -174,10 +196,10 @@ from sklearn.ensemble import RandomForestClassifier
 params = {
         'n_estimators': [1000],
         'max_features': ['auto'],
-        'max_depth': [50], #list(range(10,100,10)),
-        'min_samples_split': [10],
-        'min_samples_leaf': [1],
-        'bootstrap': [0,1]
+        'max_depth': list(range(10,100,10)),
+        'min_samples_split': [5,10],
+        'min_samples_leaf': [1,5],
+        'bootstrap': [1]
         }
 
 # Define Random Forest function
@@ -193,21 +215,21 @@ rf_gridsearch.fit(train_X, train_y)
 
 # ENSEMBLE USING SKLEARN WEIGHTED VOTING
 from sklearn.ensemble import VotingClassifier
-ensemble = VotingClassifier(estimators=[('boost', xgb_gridsearch.best_estimator_), ('trees', rf_gridsearch.best_estimator_)], voting='soft', weights=[1,0])
+ensemble = VotingClassifier(estimators=[('boost', xgb_gridsearch.best_estimator_), ('trees', rf_gridsearch.best_estimator_)], voting='soft', weights=[2,1])
 
 ensemble = ensemble.fit(train_X, train_y)
 
 # GENERATE SUBMISSION
 submission = pd.DataFrame(ensemble.predict_proba(test_X))
+# submission = pd.DataFrame(xgb_gridsearch.best_estimator_.predict_proba(test_X))
 # Attach 'id' from TEST set
-submission['id'] = test.id
+submission['id'] = [x for x in test_X.id]
 # Rename columns
 submission.columns = ['predict_0', 'predict_1', 'predict_2', 'id']
 # Reorder columns
 submission = submission[['id', 'predict_0', 'predict_1', 'predict_2']]
 # Write to .csv
 submission.to_csv(path + 'bonus_submission.csv', index=None)
-
 
 
 # -------------------------------------------------------------------------
